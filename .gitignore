@@ -1,0 +1,13 @@
+# 1. ignore build
+build/
+
+# 3. ignore tga
+*.tga
+
+# 4. ignore local cache of vscode
+.vscode/ipch/
+.vscode/*.db
+
+# 5. others
+.DS_Store
+Thumbs.db
