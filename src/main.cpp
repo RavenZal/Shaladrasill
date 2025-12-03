@@ -11,6 +11,8 @@ constexpr TGAColor green   = {  0, 255,   0, 255};
 constexpr TGAColor red     = {  0,   0, 255, 255};
 constexpr TGAColor blue    = {255, 128,  64, 255};
 constexpr TGAColor yellow  = {  0, 200, 255, 255};
+constexpr int width  = 128;
+constexpr int height = 128;
 
 void line(int ax, int ay, int bx, int by, TGAImage &framebuffer , TGAColor color)
 {   
@@ -59,51 +61,62 @@ void line(int ax, int ay, int bx, int by, TGAImage &framebuffer , TGAColor color
     }
 }
 
-int main(int argc, char** argv) 
-{
-    constexpr int width  = 800;
-    constexpr int height = 800;
-    constexpr int deepth = 800;
-    TGAImage bufferIgnoreZ(width, height, TGAImage::RGB);
-    TGAImage bufferIgnoreY(width, height, TGAImage::RGB);
-    TGAImage bufferIgnoreX(width, height, TGAImage::RGB);
-    Model ModelObject("diablo3_pose.obj");
-    //set var
-    int ax, bx, cx, ay, by, cy, az, bz, cz = 0; 
-    //draw lines
-    int FacesNum = ModelObject.getFacesNumber();
-    for(int i = 0 ; i < FacesNum ; i++)
+void triangle(int ax, int ay, int bx, int by, int cx, int cy, TGAImage &framebuffer, TGAColor color) {
+    line(ax, ay, bx, by, framebuffer, color);
+    line(bx, by, cx, cy, framebuffer, color);
+    line(cx, cy, ax, ay, framebuffer, color);
+}
+
+void fillTriangle(std::vector<int> ThisTriangle, TGAImage &framebuffer, TGAColor color, Model &model) 
+{ 
+    if(ThisTriangle.size() != 3) //not a triangle
     {
-        std::vector<int> nowFaceIs = ModelObject.getFacesFromIndex(i);
-        vec3f point_a = ModelObject.getVertsFromIndex(nowFaceIs[0]);
-        vec3f point_b = ModelObject.getVertsFromIndex(nowFaceIs[1]);
-        vec3f point_c = ModelObject.getVertsFromIndex(nowFaceIs[2]);
-        ax = ( point_a.x + _ObjModel_Correction_Factor_ ) * width / _ObjModel_Nomalization_ ;
-        ay = ( point_a.y + _ObjModel_Correction_Factor_ ) * height / _ObjModel_Nomalization_ ;
-        az = ( point_a.z + _ObjModel_Correction_Factor_ ) * deepth / _ObjModel_Nomalization_ ; 
-        bx = ( point_b.x + _ObjModel_Correction_Factor_ ) * width / _ObjModel_Nomalization_ ;
-        by = ( point_b.y + _ObjModel_Correction_Factor_ ) * height / _ObjModel_Nomalization_ ;
-        bz = ( point_b.z + _ObjModel_Correction_Factor_ ) * deepth / _ObjModel_Nomalization_ ;
-        cx = ( point_c.x + _ObjModel_Correction_Factor_ ) * width / _ObjModel_Nomalization_ ;
-        cy = ( point_c.y + _ObjModel_Correction_Factor_ ) * height / _ObjModel_Nomalization_ ;
-        cz = ( point_c.z + _ObjModel_Correction_Factor_ ) * deepth / _ObjModel_Nomalization_ ;
-        line(ax, ay, bx, by, bufferIgnoreZ, red);
-        line(ax, ay, cx, cy, bufferIgnoreZ, red);
-        line(cx, cy, bx, by, bufferIgnoreZ, red);
+      return;
+    }
+    //TODO
+}
 
-        line(ax, az, bx, bz, bufferIgnoreY, red);
-        line(ax, az, cx, cz, bufferIgnoreY, red);
-        line(cx, cz, bx, bz, bufferIgnoreY, red);
-
-        line(az, ay, bz, by, bufferIgnoreX, red);
-        line(az, ay, cz, cy, bufferIgnoreX, red);
-        line(cz, cy, bz, by, bufferIgnoreX, red);
+void fillTriangleManually(int ax, int ay, int bx, int by, int cx, int cy, TGAImage &framebuffer, TGAColor color)
+{
+    if (ay>by) { std::swap(ax, bx); std::swap(ay, by); }
+    if (ay>cy) { std::swap(ax, cx); std::swap(ay, cy); }
+    if (by>cy) { std::swap(bx, cx); std::swap(by, cy); }
+    int totalHeight = cy - ay ;
+    if( ay != by)
+    {
+        int lowerHalfHeight = by - ay;
+        for (int y = ay ; y <= by ; y++)
+        {
+            int x1 = ax + ((cx - ax)*(y - ay)) / totalHeight;
+            int x2 = ax + ((bx - ax)*(y - ay)) / lowerHalfHeight;
+            for (int x=std::min(x1,x2); x < std::max(x1,x2); x++)  // draw a horizontal line
+            {
+                framebuffer.set(x, y, color);
+            }
+        }
     }
 
+    if( by != cy)
+    {
+        int upperHalfHeight = cy - by;
+        for (int y = by ; y <= cy ; y++)
+        {
+            int x1 = ax + ((cx - ax)*(y - ay)) / totalHeight;
+            int x2 = bx + ((cx - bx)*(y - by)) / upperHalfHeight;
+            for (int x=std::min(x1,x2); x < std::max(x1,x2); x++)  // draw a horizontal line
+            {
+                framebuffer.set(x, y, color);
+            }
+        }
+    }
+}
 
-    bufferIgnoreZ.write_tga_file("diablo-noZ.tga");
-    bufferIgnoreY.write_tga_file("diablo-noY.tga");
-    bufferIgnoreX.write_tga_file("diablo-noX.tga");
-
+int main(int argc, char** argv) 
+{
+    TGAImage framebuffer(width, height, TGAImage::RGB);
+    fillTriangleManually(  7, 45, 35, 100, 45,  60, framebuffer, red);
+    fillTriangleManually(120, 35, 90,   5, 45, 110, framebuffer, white);
+    fillTriangleManually(115, 83, 80,  90, 85, 120, framebuffer, green);
+    framebuffer.write_tga_file("Triangle.tga");
     return 0;
 }
