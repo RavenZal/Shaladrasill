@@ -76,7 +76,6 @@ bool Model::setVarFromObj(const char *filename)
                 size_t positionInterval = elementStr.find('/');
                 std::string elementStrFacesIndex = elementStr.substr(0,positionInterval);
                 int elementIntFacesIndex = std::stoi(elementStrFacesIndex);
-                elementFaceSet.clear();
                 elementFaceSet.push_back(elementIntFacesIndex - 1); //index in .obj is from 1
             }
             _faces_.push_back(elementFaceSet);   

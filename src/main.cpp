@@ -1,5 +1,6 @@
 #include "tgaimage.h"
 #include "model.h"
+#include "definition.h"
 #include <cmath>
 #include <iostream>
 
@@ -77,15 +78,15 @@ int main(int argc, char** argv)
         vec3f point_a = ModelObject.getVertsFromIndex(nowFaceIs[0]);
         vec3f point_b = ModelObject.getVertsFromIndex(nowFaceIs[1]);
         vec3f point_c = ModelObject.getVertsFromIndex(nowFaceIs[2]);
-        ax = ( point_a.x + 0.5 ) * width;
-        ay = ( point_a.y + 0.5 ) * height;
-        az = ( point_a.z + 0.5 ) * deepth; 
-        bx = ( point_b.x + 0.5 ) * width;
-        by = ( point_b.y + 0.5 ) * height;
-        bz = ( point_b.z + 0.5 ) * deepth;
-        cx = ( point_c.x + 0.5 ) * width;
-        cy = ( point_c.y + 0.5 ) * height;
-        cz = ( point_c.z + 0.5 ) * deepth;
+        ax = ( point_a.x + _ObjModel_Correction_Factor_ ) * width / _ObjModel_Nomalization_ ;
+        ay = ( point_a.y + _ObjModel_Correction_Factor_ ) * height / _ObjModel_Nomalization_ ;
+        az = ( point_a.z + _ObjModel_Correction_Factor_ ) * deepth / _ObjModel_Nomalization_ ; 
+        bx = ( point_b.x + _ObjModel_Correction_Factor_ ) * width / _ObjModel_Nomalization_ ;
+        by = ( point_b.y + _ObjModel_Correction_Factor_ ) * height / _ObjModel_Nomalization_ ;
+        bz = ( point_b.z + _ObjModel_Correction_Factor_ ) * deepth / _ObjModel_Nomalization_ ;
+        cx = ( point_c.x + _ObjModel_Correction_Factor_ ) * width / _ObjModel_Nomalization_ ;
+        cy = ( point_c.y + _ObjModel_Correction_Factor_ ) * height / _ObjModel_Nomalization_ ;
+        cz = ( point_c.z + _ObjModel_Correction_Factor_ ) * deepth / _ObjModel_Nomalization_ ;
         line(ax, ay, bx, by, bufferIgnoreZ, red);
         line(ax, ay, cx, cy, bufferIgnoreZ, red);
         line(cx, cy, bx, by, bufferIgnoreZ, red);
