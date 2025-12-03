@@ -76,37 +76,28 @@ void fillTriangle(std::vector<int> ThisTriangle, TGAImage &framebuffer, TGAColor
     //TODO
 }
 
+double signed_triangle_area(int ax, int ay, int bx, int by, int cx, int cy) 
+{
+    return .5*((by-ay)*(bx+ax) + (cy-by)*(cx+bx) + (ay-cy)*(ax+cx));
+}
+
 void fillTriangleManually(int ax, int ay, int bx, int by, int cx, int cy, TGAImage &framebuffer, TGAColor color)
 {
-    if (ay>by) { std::swap(ax, bx); std::swap(ay, by); }
-    if (ay>cy) { std::swap(ax, cx); std::swap(ay, cy); }
-    if (by>cy) { std::swap(bx, cx); std::swap(by, cy); }
-    int totalHeight = cy - ay ;
-    if( ay != by)
+    int bbminx = std::min(std::min(ax, bx), cx); // bounding box for the triangle
+    int bbminy = std::min(std::min(ay, by), cy); // defined by its top left and bottom right corners
+    int bbmaxx = std::max(std::max(ax, bx), cx);
+    int bbmaxy = std::max(std::max(ay, by), cy);
+    double total_area = signed_triangle_area(ax, ay, bx, by, cx, cy);
+#pragma omp parallel for
+    for (int x=bbminx; x<=bbmaxx; x++) 
     {
-        int lowerHalfHeight = by - ay;
-        for (int y = ay ; y <= by ; y++)
+        for (int y=bbminy; y<=bbmaxy; y++) 
         {
-            int x1 = ax + ((cx - ax)*(y - ay)) / totalHeight;
-            int x2 = ax + ((bx - ax)*(y - ay)) / lowerHalfHeight;
-            for (int x=std::min(x1,x2); x < std::max(x1,x2); x++)  // draw a horizontal line
-            {
-                framebuffer.set(x, y, color);
-            }
-        }
-    }
-
-    if( by != cy)
-    {
-        int upperHalfHeight = cy - by;
-        for (int y = by ; y <= cy ; y++)
-        {
-            int x1 = ax + ((cx - ax)*(y - ay)) / totalHeight;
-            int x2 = bx + ((cx - bx)*(y - by)) / upperHalfHeight;
-            for (int x=std::min(x1,x2); x < std::max(x1,x2); x++)  // draw a horizontal line
-            {
-                framebuffer.set(x, y, color);
-            }
+            double alpha = signed_triangle_area(x, y, bx, by, cx, cy) / total_area;
+            double beta  = signed_triangle_area(x, y, cx, cy, ax, ay) / total_area;
+            double gamma = signed_triangle_area(x, y, ax, ay, bx, by) / total_area;
+            if (alpha<0 || beta<0 || gamma<0) continue; // negative barycentric coordinate => the pixel is outside the triangle
+            framebuffer.set(x, y, color);
         }
     }
 }
