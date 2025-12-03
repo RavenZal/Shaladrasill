@@ -11,8 +11,6 @@ constexpr TGAColor green   = {  0, 255,   0, 255};
 constexpr TGAColor red     = {  0,   0, 255, 255};
 constexpr TGAColor blue    = {255, 128,  64, 255};
 constexpr TGAColor yellow  = {  0, 200, 255, 255};
-constexpr int width  = 128;
-constexpr int height = 128;
 
 void line(int ax, int ay, int bx, int by, TGAImage &framebuffer , TGAColor color)
 {   
@@ -67,15 +65,6 @@ void triangle(int ax, int ay, int bx, int by, int cx, int cy, TGAImage &framebuf
     line(cx, cy, ax, ay, framebuffer, color);
 }
 
-void fillTriangle(std::vector<int> ThisTriangle, TGAImage &framebuffer, TGAColor color, Model &model) 
-{ 
-    if(ThisTriangle.size() != 3) //not a triangle
-    {
-      return;
-    }
-    //TODO
-}
-
 double signed_triangle_area(int ax, int ay, int bx, int by, int cx, int cy) 
 {
     return .5*((by-ay)*(bx+ax) + (cy-by)*(cx+bx) + (ay-cy)*(ax+cx));
@@ -88,6 +77,9 @@ void fillTriangleManually(int ax, int ay, int bx, int by, int cx, int cy, TGAIma
     int bbmaxx = std::max(std::max(ax, bx), cx);
     int bbmaxy = std::max(std::max(ay, by), cy);
     double total_area = signed_triangle_area(ax, ay, bx, by, cx, cy);
+    //the if's workmode below is not clear:
+    if (total_area<1) return; // backface culling + discarding triangles that cover less than a pixel
+
 #pragma omp parallel for
     for (int x=bbminx; x<=bbmaxx; x++) 
     {
@@ -104,10 +96,46 @@ void fillTriangleManually(int ax, int ay, int bx, int by, int cx, int cy, TGAIma
 
 int main(int argc, char** argv) 
 {
-    TGAImage framebuffer(width, height, TGAImage::RGB);
-    fillTriangleManually(  7, 45, 35, 100, 45,  60, framebuffer, red);
-    fillTriangleManually(120, 35, 90,   5, 45, 110, framebuffer, white);
-    fillTriangleManually(115, 83, 80,  90, 85, 120, framebuffer, green);
-    framebuffer.write_tga_file("Triangle.tga");
+    constexpr int width  = 800;
+    constexpr int height = 800;
+    constexpr int deepth = 800;
+    TGAImage bufferIgnoreZ(width, height, TGAImage::RGB);
+    TGAImage bufferIgnoreY(width, height, TGAImage::RGB);
+    TGAImage bufferIgnoreX(width, height, TGAImage::RGB);
+    Model ModelObject("diablo3_pose.obj");
+    //set var
+    int ax, bx, cx, ay, by, cy, az, bz, cz = 0; 
+    //draw lines
+    int FacesNum = ModelObject.getFacesNumber();
+    for(int i = 0 ; i < FacesNum ; i++)
+    {
+        std::vector<int> nowFaceIs = ModelObject.getFacesFromIndex(i);
+        vec3f point_a = ModelObject.getVertsFromIndex(nowFaceIs[0]);
+        vec3f point_b = ModelObject.getVertsFromIndex(nowFaceIs[1]);
+        vec3f point_c = ModelObject.getVertsFromIndex(nowFaceIs[2]);
+        ax = ( point_a.x + _ObjModel_Correction_Factor_ ) * width / _ObjModel_Nomalization_ ;
+        ay = ( point_a.y + _ObjModel_Correction_Factor_ ) * height / _ObjModel_Nomalization_ ;
+        az = ( point_a.z + _ObjModel_Correction_Factor_ ) * deepth / _ObjModel_Nomalization_ ; 
+        bx = ( point_b.x + _ObjModel_Correction_Factor_ ) * width / _ObjModel_Nomalization_ ;
+        by = ( point_b.y + _ObjModel_Correction_Factor_ ) * height / _ObjModel_Nomalization_ ;
+        bz = ( point_b.z + _ObjModel_Correction_Factor_ ) * deepth / _ObjModel_Nomalization_ ;
+        cx = ( point_c.x + _ObjModel_Correction_Factor_ ) * width / _ObjModel_Nomalization_ ;
+        cy = ( point_c.y + _ObjModel_Correction_Factor_ ) * height / _ObjModel_Nomalization_ ;
+        cz = ( point_c.z + _ObjModel_Correction_Factor_ ) * deepth / _ObjModel_Nomalization_ ;
+        TGAColor rnd;
+        for (int c=0; c<3; c++) rnd[c] = std::rand()%255; //use random color each triangle
+        //line(ax, ay, bx, by, bufferIgnoreZ, white); //outwards
+        fillTriangleManually(ax, ay, bx, by, cx, cy, bufferIgnoreZ, rnd);
+        //line(ax, az, bx, bz, bufferIgnoreY, white); //outwards
+        fillTriangleManually(ax, az, bx, bz, cx, cz, bufferIgnoreY, rnd);
+        //line(az, ay, bz, by, bufferIgnoreX, white); //outwards
+        fillTriangleManually(az, ay, bz, by, cz, cy, bufferIgnoreX, rnd);
+    }
+
+
+    bufferIgnoreZ.write_tga_file("diablo-noZ.tga");
+    bufferIgnoreY.write_tga_file("diablo-noY.tga");
+    bufferIgnoreX.write_tga_file("diablo-noX.tga");
+
     return 0;
 }
