@@ -70,7 +70,7 @@ double signed_triangle_area(int ax, int ay, int bx, int by, int cx, int cy)
     return .5*((by-ay)*(bx+ax) + (cy-by)*(cx+bx) + (ay-cy)*(ax+cx));
 }
 
-void fillTriangleManually(int ax, int ay, int bx, int by, int cx, int cy, TGAImage &framebuffer, TGAColor color)
+void fillTriangleManually(int ax, int ay, int az, int bx, int by, int bz, int cx, int cy, int cz, TGAImage &framebuffer)
 {
     int bbminx = std::min(std::min(ax, bx), cx); // bounding box for the triangle
     int bbminy = std::min(std::min(ay, by), cy); // defined by its top left and bottom right corners
@@ -89,53 +89,26 @@ void fillTriangleManually(int ax, int ay, int bx, int by, int cx, int cy, TGAIma
             double beta  = signed_triangle_area(x, y, cx, cy, ax, ay) / total_area;
             double gamma = signed_triangle_area(x, y, ax, ay, bx, by) / total_area;
             if (alpha<0 || beta<0 || gamma<0) continue; // negative barycentric coordinate => the pixel is outside the triangle
-            framebuffer.set(x, y, color);
+            unsigned char R = alpha * 255;
+            unsigned char G = beta * 255;
+            unsigned char B = gamma * 255;
+            framebuffer.set(x, y, {B,G,R,255});
         }
     }
 }
 
 int main(int argc, char** argv) 
 {
-    constexpr int width  = 800;
-    constexpr int height = 800;
-    constexpr int deepth = 800;
-    TGAImage bufferIgnoreZ(width, height, TGAImage::RGB);
-    TGAImage bufferIgnoreY(width, height, TGAImage::RGB);
-    TGAImage bufferIgnoreX(width, height, TGAImage::RGB);
-    Model ModelObject("diablo3_pose.obj");
-    //set var
-    int ax, bx, cx, ay, by, cy, az, bz, cz = 0; 
-    //draw lines
-    int FacesNum = ModelObject.getFacesNumber();
-    for(int i = 0 ; i < FacesNum ; i++)
-    {
-        std::vector<int> nowFaceIs = ModelObject.getFacesFromIndex(i);
-        vec3f point_a = ModelObject.getVertsFromIndex(nowFaceIs[0]);
-        vec3f point_b = ModelObject.getVertsFromIndex(nowFaceIs[1]);
-        vec3f point_c = ModelObject.getVertsFromIndex(nowFaceIs[2]);
-        ax = ( point_a.x + _ObjModel_Correction_Factor_ ) * width / _ObjModel_Nomalization_ ;
-        ay = ( point_a.y + _ObjModel_Correction_Factor_ ) * height / _ObjModel_Nomalization_ ;
-        az = ( point_a.z + _ObjModel_Correction_Factor_ ) * deepth / _ObjModel_Nomalization_ ; 
-        bx = ( point_b.x + _ObjModel_Correction_Factor_ ) * width / _ObjModel_Nomalization_ ;
-        by = ( point_b.y + _ObjModel_Correction_Factor_ ) * height / _ObjModel_Nomalization_ ;
-        bz = ( point_b.z + _ObjModel_Correction_Factor_ ) * deepth / _ObjModel_Nomalization_ ;
-        cx = ( point_c.x + _ObjModel_Correction_Factor_ ) * width / _ObjModel_Nomalization_ ;
-        cy = ( point_c.y + _ObjModel_Correction_Factor_ ) * height / _ObjModel_Nomalization_ ;
-        cz = ( point_c.z + _ObjModel_Correction_Factor_ ) * deepth / _ObjModel_Nomalization_ ;
-        TGAColor rnd;
-        for (int c=0; c<3; c++) rnd[c] = std::rand()%255; //use random color each triangle
-        //line(ax, ay, bx, by, bufferIgnoreZ, white); //outwards
-        fillTriangleManually(ax, ay, bx, by, cx, cy, bufferIgnoreZ, rnd);
-        //line(ax, az, bx, bz, bufferIgnoreY, white); //outwards
-        fillTriangleManually(ax, az, bx, bz, cx, cz, bufferIgnoreY, rnd);
-        //line(az, ay, bz, by, bufferIgnoreX, white); //outwards
-        fillTriangleManually(az, ay, bz, by, cz, cy, bufferIgnoreX, rnd);
-    }
+    constexpr int width  = 64;
+    constexpr int height = 64;
+    TGAImage framebuffer(width, height, TGAImage::RGBA);
 
+    int ax = 17, ay =  4, az =  13;
+    int bx = 55, by = 39, bz = 128;
+    int cx = 23, cy = 59, cz = 255;
 
-    bufferIgnoreZ.write_tga_file("diablo-noZ.tga");
-    bufferIgnoreY.write_tga_file("diablo-noY.tga");
-    bufferIgnoreX.write_tga_file("diablo-noX.tga");
+    fillTriangleManually(ax, ay, az, bx, by, bz, cx, cy, cz, framebuffer);
 
+    framebuffer.write_tga_file("shadow.tga");
     return 0;
 }
