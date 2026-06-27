@@ -1,6 +1,8 @@
 #pragma once
 #include <vector>
 #include "geometry.h"
+
+#define vec3f vec<3> 
 class Model {
 private:
     std::vector<vec3f> _verts_; //store all verts
