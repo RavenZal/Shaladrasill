@@ -15,7 +15,7 @@
                 "isDefault": true
             },
             "problemMatcher": ["$gcc"],
-            "detail": "Generate Makefile by MingW"
+            "detail": "Generate Makefile by MingW and CMake"
         }
     ]
 }

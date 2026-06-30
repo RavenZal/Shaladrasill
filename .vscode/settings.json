@@ -45,5 +45,6 @@
         "stdexcept": "cpp",
         "streambuf": "cpp",
         "typeinfo": "cpp"
-    }
+    },
+    "workbench.colorTheme": "Forest Focus"
 }

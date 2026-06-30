@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.10)
 
 project(TinyShader)
 
+set(CMAKE_CXX_STANDARD 17)
+
 file(GLOB SRC CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/*.cpp")
 
 message(STATUS "[CMakeDebug]Found root files: ${CMAKE_SOURCE_DIR}")
