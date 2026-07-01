@@ -14,17 +14,17 @@ Model::~Model()
 //default    
 }
 
-int Model::getVertsNumber()
+int Model::getVertsNumber() const
 {
    return _verts_.size();
 }
 
-int Model::getFacesNumber()
+int Model::getFacesNumber() const
 {
    return _faces_.size();
 }
 
-const vec3f& Model::getVertsFromIndex(int index)
+const vec3f& Model::getVertsFromIndex(int index) const
 {
    if(_verts_.size() > index && index >= 0 )
    {
@@ -35,7 +35,7 @@ const vec3f& Model::getVertsFromIndex(int index)
    }
 }
 
-const std::vector<int>& Model::getFacesFromIndex(int index)
+const std::vector<int>& Model::getFacesFromIndex(int index) const
 {  
    if(_faces_.size() > index && index >= 0 )
    {

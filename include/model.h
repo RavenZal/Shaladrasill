@@ -13,10 +13,10 @@ public:
     ~Model(); //default
 
     //interfaces
-    int getVertsNumber(); //maybe useless, get the full number of verts
-    int getFacesNumber(); //get the full number of verts
-    const vec3f& getVertsFromIndex(int index); //get the verts information
-    const std::vector<int>& getFacesFromIndex(int index); //get the faces information
+    int getVertsNumber() const; //maybe useless, get the full number of verts
+    int getFacesNumber() const; //get the full number of verts
+    const vec3f& getVertsFromIndex(int index) const; //get the verts information
+    const std::vector<int>& getFacesFromIndex(int index) const; //get the faces information
 
 protected:
     bool setVarFromObj(const char *filename); //support function in create function
