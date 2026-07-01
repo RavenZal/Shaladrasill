@@ -22,6 +22,7 @@ struct vec
     double  operator[](const int i) const {assert(i >= 0 && i < N) ; return data[i];}
     double norm2() const {return (*this)* (*this);}
     double norm() const {return std::sqrt(norm2());}
+    vec<N> normalized() const {return (*this) / norm();} 
 };
 
 //dot
@@ -167,6 +168,7 @@ template <> struct vec<4>
     double norm2() const { return (*this)*(*this); }
     double norm()  const { return std::sqrt(norm2()); }
     vec<4> normalize() { return (*this)/norm(); }
+    vec<2> xy() const {return vec<2>(x,y);}
 
     vec<4>(double _x=0, double _y=0, double _z=0, double _w=0) : x(_x), y(_y), z(_z), w(_w) {}
 };
@@ -178,7 +180,7 @@ template <> struct vec<4>
 template<int DimRows, int DimCols> struct mat
 {
     vec<DimCols> rows[DimRows];
-    mat() {}
+    //mat() {}
 
     vec<DimCols>& operator[] (const int idx)       { assert(idx>=0 && idx<DimRows); return rows[idx]; }
     const vec<DimCols>& operator[] (const int idx) const { assert(idx>=0 && idx<DimRows); return rows[idx]; }
@@ -193,6 +195,12 @@ template<int DimRows, int DimCols> struct mat
     void set_col(const int idx, const vec<DimRows> &v) {
         assert(idx>=0 && idx<DimCols);
         for (int i=DimRows; i--; rows[i][idx]=v[i]);
+    }
+
+    double det() const {
+    static_assert((DimRows == DimCols) && (DimRows == 3), "det() only for square matrices");
+    double det = rows[0][0] * (rows[1][1]*rows[2][2] - rows[1][2]*rows[2][1]) - rows[0][1] * (rows[1][0]*rows[2][2] - rows[1][2]*rows[2][0]) + rows[0][2] * (rows[1][0]*rows[2][1] - rows[1][1]*rows[2][0]); 
+    return det;
     }
 
 };
@@ -255,9 +263,11 @@ template <int length> mat<length , length> inversion(const mat<length, length>& 
     for(int col = length - 1 ; col >= 0 ; col--)
     {
         vec<length> colCopy = OriginMatCopy.col(col);
-        int MaxIdx = 0;
-        double maxVarInCol = colCopy[0];
-        for(int rowIdx = length - 1 ; rowIdx >=0 ; rowIdx--)
+        // Rows below `col` have already been used as pivots for columns to the right,
+        // so we must not pick them again here.
+        int MaxIdx = col;
+        double maxVarInCol = colCopy[col];
+        for(int rowIdx = col - 1 ; rowIdx >=0 ; rowIdx--)
         {
             if (std::abs(maxVarInCol) < std::abs(colCopy[rowIdx]))
             {
@@ -298,6 +308,11 @@ template <int length> mat<length , length> inversion(const mat<length, length>& 
         
     }
     return AnsMat;
+}
+
+template <int length> mat<length , length> invert_transpose(const mat<length, length>& Mat)
+{
+    return transpose(inversion(Mat));
 }
 
 //---------------------------------------------------
