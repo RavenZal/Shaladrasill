@@ -25,8 +25,17 @@ extern std::vector<double> zbuffer;     // the depth buffer
 
 struct RandomShader : IShader {
     const Model &model;
+    //preSet
     TGAColor color = {};
     vec<3> tri[3];  // triangle in eye coordinates
+    //light
+    vec3f l = vec3f(1, 1, 1).normalize(); 
+    double ka = 0.1; // ambient term 
+    double kd = 0.5; // diffuse term
+    double ks = 0.2; // specular term
+    double shininess = 32.0;
+    //base color
+    vec3f base_color = vec3f (180, 180, 180); //grey
 
     RandomShader(const Model &m) : model(m) {
     }
@@ -41,7 +50,27 @@ struct RandomShader : IShader {
     }
 
     virtual std::pair<bool,TGAColor> fragment(const vec<3> bar) const {
-        return {false, color};                                    // do not discard the pixel
+        vec3f n = cross(tri[1] - tri[0] , tri[2] - tri[0]).normalize();
+        vec3f center_poiont_vec = (tri[0] + tri[1] + tri[2]) / 3.0 ;
+        vec3f v = (vec3f(0,0,0) - center_poiont_vec).normalize();
+        //diffuse
+        double unit_dif = std::max(0., l * n);
+        double diffuse = kd * unit_dif;
+        //ambient
+        double ambient = ka;
+        //specular
+        double specular = 0.0;       
+        if(unit_dif > 0.0)
+        {
+            vec3f r = ((2 * (n * l) * n) - l).normalize() ;
+            specular = ks * std::pow(std::max(0.0, r * v), shininess);
+        }
+        //total intensity
+        double intensity = std::clamp(ambient + diffuse + specular, 0.0, 1.0);
+        unsigned char r = static_cast<unsigned char>(std::clamp(base_color.x * intensity, 0.0, 255.0));
+        unsigned char g = static_cast<unsigned char>(std::clamp(base_color.y * intensity, 0.0, 255.0));
+        unsigned char b = static_cast<unsigned char>(std::clamp(base_color.z * intensity, 0.0, 255.0));
+        return {false, TGAColor{b , g , r , 255}};                                    // do not discard the pixel
     }
 };
 
