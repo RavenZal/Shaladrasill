@@ -20,7 +20,7 @@ constexpr int width  = 800;
 constexpr int height = 800;
 constexpr float deepth = 255.0;
 
-extern mat<4,4> ModelView, Perspective; // "OpenGL" state matrices and
+extern mat<4,4> ModelView, Perspective; // like OpenGL
 extern std::vector<double> zbuffer;     // the depth buffer
 
 struct RandomShader : IShader {
@@ -36,7 +36,8 @@ struct RandomShader : IShader {
     double shininess = 32.0;
     //base color
     vec3f base_color = vec3f (180, 180, 180); //grey
-
+    //tri normal line
+    vec3f thisTriNormlineSet[3];
     RandomShader(const Model &m) : model(m) {
     }
 
@@ -44,8 +45,11 @@ struct RandomShader : IShader {
         const std::vector<int>& faceSet = model.getFacesFromIndex(face);
         int vertexIndex = faceSet[vert]; 
         vec<3> v = model.getVertsFromIndex(vertexIndex);                       // current vertex in object coordinates
+        vec<3> n = model.getNormalLineFrom(face, vert); //get line norm
         vec<4> gl_Position = ModelView * vec<4>{v.x, v.y, v.z, 1.};
+        vec<4> gl_Normal = ModelView * vec<4>{n.x, n.y, n.z, 0.}; 
         tri[vert] = {gl_Position[0], gl_Position[1], gl_Position[2]};                            // in eye coordinates
+        thisTriNormlineSet[vert] = vec3f (gl_Normal[0], gl_Normal[1], gl_Normal[2]).normalize();
         return Perspective * gl_Position;                         // in clip coordinates
     }
 

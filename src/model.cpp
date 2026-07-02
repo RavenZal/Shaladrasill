@@ -46,6 +46,18 @@ const std::vector<int>& Model::getFacesFromIndex(int index) const
    }
 }
 
+const vec3f &Model::getNormalLineFrom(int faceIndex , int vertsIndex) const
+{
+    if(_norms_faces_.size() > faceIndex && faceIndex >=0)
+    {
+        return (_norms_[ _norms_faces_[faceIndex][vertsIndex]]);
+    }else{
+        static vec3f ErrorNormlines;
+        return ErrorNormlines;
+    }
+}
+
+
 bool Model::setVarFromObj(const char *filename)
 {  
     std::string FILE_PATH = std::string("assets/") + filename ;
@@ -71,15 +83,37 @@ bool Model::setVarFromObj(const char *filename)
         {   
             std::string elementStr;
             std::vector<int> elementFaceSet;
+            std::vector<int> elementTexFaceSet;
+            std::vector<int> elementNormFaceSet;
             while ( ss >> elementStr )
             {
-                size_t positionInterval = elementStr.find('/');
-                std::string elementStrFacesIndex = elementStr.substr(0,positionInterval);
-                int elementIntFacesIndex = std::stoi(elementStrFacesIndex);
-                elementFaceSet.push_back(elementIntFacesIndex - 1); //index in .obj is from 1
-            }
-            _faces_.push_back(elementFaceSet);   
-        }  
+                std::stringstream faceStream(elementStr);
+                std::string item;
+                std::vector<int> parsedIndices;
+                while (std::getline(faceStream, item, '/'))
+                {
+                    if (item.empty())
+                    {
+                        parsedIndices.push_back(-1);
+                    }else
+                    {
+                        parsedIndices.push_back(std::stoi(item) - 1);
+                    }
+                }
+                elementFaceSet.push_back(parsedIndices.size() > 0 ? parsedIndices[0] : -1);
+                elementTexFaceSet.push_back(parsedIndices.size() > 1 ? parsedIndices[1] : -1);
+                elementNormFaceSet.push_back(parsedIndices.size() > 2 ? parsedIndices[2] : -1);
+            }           
+            _faces_.push_back(elementFaceSet);
+            _tex_faces_.push_back(elementTexFaceSet);
+            _norms_faces_.push_back(elementNormFaceSet); 
+        } else if (type == "vn")
+        {
+            double x, y, z;
+            ss >> x >> y >> z;
+            vec3f elementOfvec3f(x, y, z);
+            _norms_.push_back(elementOfvec3f);
+        } 
     }
     std::cout << "[Debug]Model::setVarFromObj() Success" << std::endl;
     return true;   
