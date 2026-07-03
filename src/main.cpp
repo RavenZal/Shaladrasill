@@ -54,7 +54,10 @@ struct RandomShader : IShader {
     }
 
     virtual std::pair<bool,TGAColor> fragment(const vec<3> bar) const {
-        vec3f n = cross(tri[1] - tri[0] , tri[2] - tri[0]).normalize();
+        vec3f n = (thisTriNormlineSet[0] * bar.x
+                  +thisTriNormlineSet[1] * bar.y
+                  +thisTriNormlineSet[2] * bar.z
+        ).normalize();
         vec3f center_poiont_vec = (tri[0] + tri[1] + tri[2]) / 3.0 ;
         vec3f v = (vec3f(0,0,0) - center_poiont_vec).normalize();
         //diffuse
