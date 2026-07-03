@@ -9,6 +9,7 @@ Model::Model(const char *filename)
    setVarFromObj(filename);
    _diffusemap_.read_tga_file("assets/diablo3_pose_diffuse.tga");
    _normalmap_.read_tga_file("assets/diablo3_pose_nm.tga");
+   _tangentmap_.read_tga_file("assets/diablo3_pose_nm_tangent.tga");
 }
 
 Model::~Model() 
@@ -82,6 +83,17 @@ vec3f Model::normal(vec<2> uv) const
     int x = uv.x * (_normalmap_.width() - 1);
     int y = (1 - uv.y) * (_normalmap_.height() - 1);
     TGAColor c = _normalmap_.get(x, y);
+    double nx = c[2] * 2.0 / 255.0 - 1.0;
+    double ny = c[1] * 2.0 / 255.0 - 1.0;
+    double nz = c[0] * 2.0 / 255.0 - 1.0;
+    return vec3f(nx, ny, nz).normalize();
+}
+
+vec3f Model::normal_tangent(vec<2> uv) const
+{
+    int x = uv.x * (_tangentmap_.width() - 1);
+    int y = (1 - uv.y) * (_tangentmap_.height() - 1);
+    TGAColor c = _tangentmap_.get(x, y);
     double nx = c[2] * 2.0 / 255.0 - 1.0;
     double ny = c[1] * 2.0 / 255.0 - 1.0;
     double nz = c[0] * 2.0 / 255.0 - 1.0;

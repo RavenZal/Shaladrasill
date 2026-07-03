@@ -29,10 +29,10 @@ struct RandomShader : IShader {
     vec<3> tri[3];  // triangle in eye coordinates
     //light
     vec3f l = vec3f(1, 1, 1).normalize(); 
-    double ka = 0.8; // ambient term 
-    double kd = 0.5; // diffuse term
-    double ks = 0.2; // specular term
-    double shininess = 32.0;
+    double ka = 0.3; // ambient term 
+    double kd = 0.2; // diffuse term
+    double ks = 0.1; // specular term
+    double shininess = 64.0;
     //base color
     vec3f base_color = vec3f (180, 180, 180); //grey
     //tri normal line
@@ -61,13 +61,29 @@ struct RandomShader : IShader {
                   +thisTriNormlineSet[1] * bar.y
                   +thisTriNormlineSet[2] * bar.z
         ).normalize();
+
+        //TGN
+        vec3f N = interpolated_n ;
+        vec3f E1 = tri[1] - tri[0];
+        vec3f E2 = tri[2] - tri[0];
+
+        vec<2> dUV1 = thisTriTexSet[1] - thisTriTexSet[0];
+        vec<2> dUV2 = thisTriTexSet[2] - thisTriTexSet[0];
+        double det = dUV1.x * dUV2.y - dUV2.x * dUV1.y;
+        vec3f T = (E1 * dUV2.y - E2 * dUV1.y) / det;
+        vec3f B = (E2 * dUV1.x - E1 * dUV2.x) / det;
         vec<2> uv = (thisTriTexSet[0] * bar.x
                     +thisTriTexSet[1] * bar.y
                     +thisTriTexSet[2] * bar.z
         );
+
+        vec3f n_tangent = model.normal_tangent(uv);
         vec3f fragPos = tri[0] * bar.x + tri[1] * bar.y + tri[2] * bar.z;
         vec3f v = (vec3f(0,0,0) - fragPos).normalize();
-        vec3f n = model.normal(uv);
+        //vec3f n = model.normal(uv);
+        vec3f n = (T * n_tangent.x +
+                   B * n_tangent.y +
+                   N * n_tangent.z).normalize();
         //diffuse
         double unit_dif = std::max(0., l * n);
         double diffuse = kd * unit_dif;

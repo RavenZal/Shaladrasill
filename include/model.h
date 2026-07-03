@@ -14,6 +14,7 @@ private:
     std::vector<vec<2>> _tex_coords_;
     TGAImage _diffusemap_;
     TGAImage _normalmap_;
+    TGAImage _tangentmap_;
 
 public:
     Model(const char *filename);
@@ -28,6 +29,7 @@ public:
     const vec<2> &getTexCoord(int face, int vert) const;
     TGAColor diffuse(vec<2> uv) const;
     vec3f normal(vec<2> uv) const;
+    vec3f normal_tangent(vec<2> uv) const;
 
 protected:
     bool setVarFromObj(const char *filename); //support function in create function
