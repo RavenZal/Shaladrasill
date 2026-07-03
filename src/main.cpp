@@ -15,7 +15,6 @@ constexpr TGAColor green   = {  0, 255,   0, 255};
 constexpr TGAColor red     = {  0,   0, 255, 255};
 constexpr TGAColor blue    = {255, 128,  64, 255};
 constexpr TGAColor yellow  = {  0, 200, 255, 255};
-
 constexpr int width  = 800;
 constexpr int height = 800;
 constexpr float deepth = 255.0;
@@ -30,7 +29,7 @@ struct RandomShader : IShader {
     vec<3> tri[3];  // triangle in eye coordinates
     //light
     vec3f l = vec3f(1, 1, 1).normalize(); 
-    double ka = 0.1; // ambient term 
+    double ka = 0.8; // ambient term 
     double kd = 0.5; // diffuse term
     double ks = 0.2; // specular term
     double shininess = 32.0;
@@ -38,45 +37,57 @@ struct RandomShader : IShader {
     vec3f base_color = vec3f (180, 180, 180); //grey
     //tri normal line
     vec3f thisTriNormlineSet[3];
+    //tri texture
+    vec<2> thisTriTexSet[3];
     RandomShader(const Model &m) : model(m) {
     }
 
     virtual vec<4> vertex(const int face, const int vert) {
         const std::vector<int>& faceSet = model.getFacesFromIndex(face);
         int vertexIndex = faceSet[vert]; 
+        vec<2> uv = model.getTexCoord(face , vert);
         vec<3> v = model.getVertsFromIndex(vertexIndex);                       // current vertex in object coordinates
         vec<3> n = model.getNormalLineFrom(face, vert); //get line norm
         vec<4> gl_Position = ModelView * vec<4>{v.x, v.y, v.z, 1.};
         vec<4> gl_Normal = ModelView * vec<4>{n.x, n.y, n.z, 0.}; 
         tri[vert] = {gl_Position[0], gl_Position[1], gl_Position[2]};                            // in eye coordinates
         thisTriNormlineSet[vert] = vec3f (gl_Normal[0], gl_Normal[1], gl_Normal[2]).normalize();
+        thisTriTexSet[vert] = uv;
         return Perspective * gl_Position;                         // in clip coordinates
     }
 
     virtual std::pair<bool,TGAColor> fragment(const vec<3> bar) const {
-        vec3f n = (thisTriNormlineSet[0] * bar.x
+        vec3f interpolated_n = (thisTriNormlineSet[0] * bar.x
                   +thisTriNormlineSet[1] * bar.y
                   +thisTriNormlineSet[2] * bar.z
         ).normalize();
-        vec3f center_poiont_vec = (tri[0] + tri[1] + tri[2]) / 3.0 ;
-        vec3f v = (vec3f(0,0,0) - center_poiont_vec).normalize();
+        vec<2> uv = (thisTriTexSet[0] * bar.x
+                    +thisTriTexSet[1] * bar.y
+                    +thisTriTexSet[2] * bar.z
+        );
+        vec3f fragPos = tri[0] * bar.x + tri[1] * bar.y + tri[2] * bar.z;
+        vec3f v = (vec3f(0,0,0) - fragPos).normalize();
+        vec3f n = model.normal(uv);
         //diffuse
         double unit_dif = std::max(0., l * n);
         double diffuse = kd * unit_dif;
         //ambient
         double ambient = ka;
         //specular
-        double specular = 0.0;       
+        double specular = ks;       
         if(unit_dif > 0.0)
         {
             vec3f r = ((2 * (n * l) * n) - l).normalize() ;
             specular = ks * std::pow(std::max(0.0, r * v), shininess);
         }
+        //color Texture
+        TGAColor tex = model.diffuse(uv);
+        vec3f albedo(tex[2], tex[1], tex[0]);
         //total intensity
         double intensity = std::clamp(ambient + diffuse + specular, 0.0, 1.0);
-        unsigned char r = static_cast<unsigned char>(std::clamp(base_color.x * intensity, 0.0, 255.0));
-        unsigned char g = static_cast<unsigned char>(std::clamp(base_color.y * intensity, 0.0, 255.0));
-        unsigned char b = static_cast<unsigned char>(std::clamp(base_color.z * intensity, 0.0, 255.0));
+        unsigned char r = static_cast<unsigned char>(std::clamp(albedo.x * intensity, 0.0, 255.0));
+        unsigned char g = static_cast<unsigned char>(std::clamp(albedo.y * intensity, 0.0, 255.0));
+        unsigned char b = static_cast<unsigned char>(std::clamp(albedo.z * intensity, 0.0, 255.0));
         return {false, TGAColor{b , g , r , 255}};                                    // do not discard the pixel
     }
 };
@@ -106,9 +117,6 @@ int main(int argc, char** argv)
         clip[0] = shader.vertex(i, 0);
         clip[1] = shader.vertex(i, 1);
         clip[2] = shader.vertex(i, 2);
-        TGAColor rnd;
-        for (int c=0; c<3; c++) rnd[c] = std::rand()%255; //use random color each triangle
-        shader.color = rnd;
         rasterize(clip, shader, framebuffer);
     }
     //mapping Z Buffer

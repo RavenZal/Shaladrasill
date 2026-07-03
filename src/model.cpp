@@ -7,6 +7,8 @@
 Model::Model(const char *filename) 
 {
    setVarFromObj(filename);
+   _diffusemap_.read_tga_file("assets/diablo3_pose_diffuse.tga");
+   _normalmap_.read_tga_file("assets/diablo3_pose_nm.tga");
 }
 
 Model::~Model() 
@@ -57,6 +59,34 @@ const vec3f &Model::getNormalLineFrom(int faceIndex , int vertsIndex) const
     }
 }
 
+const vec<2> &Model::getTexCoord(int faceIndex, int vertsIndex) const
+{
+    if(_tex_faces_.size() > faceIndex && faceIndex >=0)
+    {
+        return (_tex_coords_[_tex_faces_[faceIndex][vertsIndex]]);
+    }else{
+        static vec<2> ErrorTex;
+        return ErrorTex;
+    }
+}
+
+TGAColor Model::diffuse(vec<2> uv) const
+{
+    int x = uv.x * (_diffusemap_.width() - 1);
+    int y = (1 - uv.y) * (_diffusemap_.height() - 1);
+    return _diffusemap_.get(x,y);
+}
+
+vec3f Model::normal(vec<2> uv) const
+{
+    int x = uv.x * (_normalmap_.width() - 1);
+    int y = (1 - uv.y) * (_normalmap_.height() - 1);
+    TGAColor c = _normalmap_.get(x, y);
+    double nx = c[2] * 2.0 / 255.0 - 1.0;
+    double ny = c[1] * 2.0 / 255.0 - 1.0;
+    double nz = c[0] * 2.0 / 255.0 - 1.0;
+    return vec3f(nx, ny, nz).normalize();
+}
 
 bool Model::setVarFromObj(const char *filename)
 {  
@@ -113,7 +143,12 @@ bool Model::setVarFromObj(const char *filename)
             ss >> x >> y >> z;
             vec3f elementOfvec3f(x, y, z);
             _norms_.push_back(elementOfvec3f);
-        } 
+        } else if (type == "vt")
+        {
+            double u, v;
+            ss >> u >> v;
+            _tex_coords_.push_back(vec<2>(u, v));
+        }
     }
     std::cout << "[Debug]Model::setVarFromObj() Success" << std::endl;
     return true;   
