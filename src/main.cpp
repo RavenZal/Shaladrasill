@@ -19,27 +19,73 @@ constexpr int width  = 800;
 constexpr int height = 800;
 constexpr float deepth = 255.0;
 
-extern mat<4,4> ModelView, Perspective; // like OpenGL
+extern mat<4,4> ModelView, Perspective, Viewport; // like OpenGL
 extern std::vector<double> zbuffer;     // the depth buffer
 
+vec3f light_dir;
+vec3f light_eye;
+
+mat<4,4> ShadowModelView ;
+mat<4,4> ShadowPerspective ;
+mat<4,4> ShadowViewport ;
+    
+struct DepthShader : IShader{
+    const Model &model;
+    //preSet
+    TGAColor color = {};
+    DepthShader(const Model &m) : model(m) {
+    }
+
+    virtual vec<4> vertex(const int face, const int vert) {
+    const std::vector<int>& faceSet = model.getFacesFromIndex(face);
+    int vertexIndex = faceSet[vert]; 
+    vec<3> v = model.getVertsFromIndex(vertexIndex);                       // current vertex in object coordinates
+    vec<3> n = model.getNormalLineFrom(face, vert); //get line norm
+    vec<4> gl_Position = ModelView * vec<4>{v.x, v.y, v.z, 1.};
+    vec<4> gl_Normal = ModelView * vec<4>{n.x, n.y, n.z, 0.}; 
+    return Perspective * gl_Position;                         // in clip coordinates
+    }
+
+    virtual std::pair<bool,TGAColor> fragment(const vec<3> bar) const {
+        unsigned char b = rand() %255;
+        unsigned char g = rand() %255;
+        unsigned char r = rand() %255;
+        return {false, TGAColor{b , g , r , 255}};                                    // do not discard the pixel
+    }
+
+
+};
 struct RandomShader : IShader {
     const Model &model;
+    vec3f l;
+    const std::vector<double> &_shadowbuffer;
     //preSet
     TGAColor color = {};
     vec<3> tri[3];  // triangle in eye coordinates
     //light
-    vec3f l = vec3f(1, 1, 1).normalize(); 
     double ka = 0.3; // ambient term 
-    double kd = 0.2; // diffuse term
-    double ks = 0.1; // specular term
-    double shininess = 64.0;
+    double kd = 0.85; // diffuse term
+    double ks = 0.20; // specular term
+    double shininess = 32.0;
     //base color
     vec3f base_color = vec3f (180, 180, 180); //grey
     //tri normal line
     vec3f thisTriNormlineSet[3];
     //tri texture
     vec<2> thisTriTexSet[3];
-    RandomShader(const Model &m) : model(m) {
+    //tri shadow
+    vec<4> shadowClip[3]; //in clip shadow coor, without /w
+    double cameraInvW[3]; //with /w
+    //in shadowTri : x = x in shadow map, y = y in shadow map
+    //z = deepth in light view
+    RandomShader(const Model &m, const std::vector<double>& shadowbuffer) : model(m), _shadowbuffer(shadowbuffer) 
+    {
+        //l
+        vec<4> _l;
+        l = light_dir;
+        _l = ModelView * vec<4>{l.x , l.y , l.z , 0.};
+        _l = Perspective * _l; 
+        l = {_l.x , _l.y , _l.z};
     }
 
     virtual vec<4> vertex(const int face, const int vert) {
@@ -53,10 +99,69 @@ struct RandomShader : IShader {
         tri[vert] = {gl_Position[0], gl_Position[1], gl_Position[2]};                            // in eye coordinates
         thisTriNormlineSet[vert] = vec3f (gl_Normal[0], gl_Normal[1], gl_Normal[2]).normalize();
         thisTriTexSet[vert] = uv;
-        return Perspective * gl_Position;                         // in clip coordinates
+        //keep var in shadow tri
+        vec<4> camera_clip = Perspective * gl_Position;
+        shadowClip[vert] =
+            ShadowPerspective *
+            ShadowModelView *
+            vec<4>{v.x, v.y, v.z, 1.0};
+       cameraInvW[vert] = 1.0 / camera_clip.w;
+        //return
+        return camera_clip;                         // in clip coordinates
     }
 
-    virtual std::pair<bool,TGAColor> fragment(const vec<3> bar) const {
+    virtual std::pair<bool,TGAColor> fragment(const vec<3> bar ) const {
+        //shadow_pt
+        vec3f correctedBar{
+            bar.x * cameraInvW[0],
+            bar.y * cameraInvW[1],
+            bar.z * cameraInvW[2]
+        };
+        double correctedSum =
+            correctedBar.x +
+            correctedBar.y +
+            correctedBar.z;
+
+        correctedBar = correctedBar / correctedSum;
+        vec<4> light_clip =
+        shadowClip[0] * correctedBar.x
+        + shadowClip[1] * correctedBar.y
+        + shadowClip[2] * correctedBar.z;
+        vec<4> light_ndc = light_clip / light_clip.w;
+        vec<2> light_xy = (ShadowViewport * light_ndc).xy();
+        vec3f shadowPt{
+            light_xy.x,
+            light_xy.y,
+            light_ndc.z
+        };
+        //check
+        double visibility = 1.0;
+
+        bool insideShadowMap =
+            shadowPt.x >= 0.0
+            && shadowPt.x < static_cast<double>(width)
+            && shadowPt.y >= 0.0
+            && shadowPt.y < static_cast<double>(height);
+
+        if (insideShadowMap)
+        {
+            int shadowX = static_cast<int>(shadowPt.x);
+            int shadowY = static_cast<int>(shadowPt.y);
+
+            double shadowDepth =
+                _shadowbuffer[shadowX + shadowY * width];
+
+            if (shadowDepth > -std::numeric_limits<double>::max())
+            {
+                double bias = 1e-2;
+
+                bool in_shadow =
+                    shadowPt.z < shadowDepth - bias;
+
+                visibility = in_shadow ? 0.05 : 1.0;
+            }
+        }
+
         vec3f interpolated_n = (thisTriNormlineSet[0] * bar.x
                   +thisTriNormlineSet[1] * bar.y
                   +thisTriNormlineSet[2] * bar.z
@@ -100,7 +205,7 @@ struct RandomShader : IShader {
         TGAColor tex = model.diffuse(uv);
         vec3f albedo(tex[2], tex[1], tex[0]);
         //total intensity
-        double intensity = std::clamp(ambient + diffuse + specular, 0.0, 1.0);
+        double intensity = std::clamp(ambient + visibility * (diffuse + specular), 0.0, 1.0);
         unsigned char r = static_cast<unsigned char>(std::clamp(albedo.x * intensity, 0.0, 255.0));
         unsigned char g = static_cast<unsigned char>(std::clamp(albedo.y * intensity, 0.0, 255.0));
         unsigned char b = static_cast<unsigned char>(std::clamp(albedo.z * intensity, 0.0, 255.0));
@@ -111,6 +216,7 @@ struct RandomShader : IShader {
 int main(int argc, char** argv) 
 {
     TGAImage framebuffer(width, height, TGAImage::RGB);
+    TGAImage Tempbuffer(width, height, TGAImage::RGB);
     Model ModelObject("diablo3_pose.obj");
     //draw lines
     int FacesNum = ModelObject.getFacesNumber();
@@ -118,14 +224,36 @@ int main(int argc, char** argv)
     const vec<3>    eye{-1,0,2}; // camera position
     const vec<3> center{0,0,0};  // camera direction
     const vec<3>     up{0,1,0};  // camera up vector
+    light_dir = vec3f(1 , 1 , 1).normalize();
+    light_eye = center + light_dir * 5;
 
+
+    //first
+    lookat(light_eye, center, up);                              // build the ModelView   matrix
+    init_perspective((light_eye - center).norm());                        // build the Perspective matrix
+    init_viewport(width/16, height/16, width*7/8, height*7/8); // build the Viewport    matrix
+    init_zbuffer(width, height);
+
+    DepthShader depthShader(ModelObject);
+    for (int i = 0 ; i < FacesNum ; i++) {
+    Triangle clip;
+    clip[0] = depthShader.vertex(i, 0);
+    clip[1] = depthShader.vertex(i, 1);
+    clip[2] = depthShader.vertex(i, 2);
+    rasterize(clip, depthShader, Tempbuffer);
+    }
+    std::vector<double> shadowbuffer = zbuffer;
+    ShadowModelView = ModelView;
+    ShadowPerspective = Perspective;
+    ShadowViewport = Viewport;
+    
+    //sencond
     lookat(eye, center, up);                              // build the ModelView   matrix
     init_perspective((eye-center).norm());                        // build the Perspective matrix
     init_viewport(width/16, height/16, width*7/8, height*7/8); // build the Viewport    matrix
     init_zbuffer(width, height);
 
-    //make shader
-    RandomShader shader(ModelObject);
+    RandomShader shader(ModelObject, shadowbuffer);
 
     for(int i = 0 ; i < FacesNum ; i++)
     {
@@ -140,10 +268,10 @@ int main(int argc, char** argv)
     double Zmin = std::numeric_limits<double>::max();
     for (int i = 0 ; i < width*height ; i++)
     {
-        if(zbuffer[i] > - std::numeric_limits<double>::max())
+        if(shadowbuffer[i] > - std::numeric_limits<double>::max())
         {
-            Zmin = std::min(Zmin , zbuffer[i]);
-            Zmax = std::max(Zmax , zbuffer[i]);
+            Zmin = std::min(Zmin , shadowbuffer[i]);
+            Zmax = std::max(Zmax , shadowbuffer[i]);
         }
     }
     //Grey Image
@@ -152,7 +280,7 @@ int main(int argc, char** argv)
     {
          for (int y = height - 1 ; y >= 0 ; y-- )
          {
-            double depth = zbuffer[x + y * width];
+            double depth = shadowbuffer[x + y * width];
             if(depth > - std::numeric_limits<double>::max())
             {
                 unsigned char gray = 255 * (depth - Zmin) / (Zmax - Zmin);

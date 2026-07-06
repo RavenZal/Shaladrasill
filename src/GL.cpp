@@ -28,7 +28,7 @@ void init_viewport(const int x, const int y, const int w, const int h)
 }
 
 void init_zbuffer(const int width, const int height) {
-    zbuffer = std::vector<double>(width*height, -1000.);
+    zbuffer = std::vector<double>(width*height, -std::numeric_limits<double>::max());
 }
 
 void rasterize(const Triangle &clip , const IShader &shader , TGAImage &framebuffer)
