@@ -8,7 +8,7 @@ void init_zbuffer(const int width, const int height);
 
 struct IShader {
     virtual vec<4> vertex(const int face, const int vert) = 0;
-    virtual std::pair<bool,TGAColor> fragment(const vec3f bar) const = 0;
+    virtual std::pair<bool,TGAColor> fragment(const vec3f bar, const int pixelIndex) const = 0;
     virtual ~IShader() = default;
 };
 

@@ -52,7 +52,9 @@ void rasterize(const Triangle &clip , const IShader &shader , TGAImage &framebuf
             if (bc.x < 0 || bc.y < 0 || bc.z < 0) continue;
             double z = bc * vec<3>(ndc[0].z, ndc[1].z, ndc[2].z);
             if (z <= zbuffer[x + y * framebuffer.width()]) continue;
-            auto [discard, color] = shader.fragment(bc);
+            int pixelIndex = x + y * framebuffer.width();
+            auto [discard, color] =
+            shader.fragment(bc, pixelIndex);
             if (discard) continue;
             zbuffer[x + y * framebuffer.width()] = z;
             framebuffer.set(x, y, color);
