@@ -60,7 +60,6 @@ struct RandomShader : IShader {
     const Model &model;
     vec3f l;
     const std::vector<double> &_shadowbuffer;
-    const std::vector<double> &_aoBuffer;
     //preSet
     TGAColor color = {};
     vec<3> tri[3];  // triangle in eye coordinates
@@ -80,7 +79,7 @@ struct RandomShader : IShader {
     double cameraInvW[3]; //with /w
     //in shadowTri : x = x in shadow map, y = y in shadow map
     //z = deepth in light view
-    RandomShader(const Model &m, const std::vector<double>& shadowbuffer, const std::vector<double> &aoBuffer) : model(m), _shadowbuffer(shadowbuffer), _aoBuffer(aoBuffer)
+    RandomShader(const Model &m, const std::vector<double>& shadowbuffer) : model(m), _shadowbuffer(shadowbuffer)
     {
         //l
         vec<4> _l = ModelView * vec<4>{light_dir.x , light_dir.y , light_dir.z , 0.};
@@ -192,12 +191,7 @@ struct RandomShader : IShader {
         double unit_dif = std::max(0., l * n);
         double diffuse = kd * unit_dif;
         //ambient
-        double ao = std::clamp(
-        _aoBuffer[pixelIndex],
-        0.0,
-        1.0
-        );
-        double ambient = ka * ao;
+        double ambient = ka;
         //specular
         double specular = 0.0;       
         if(unit_dif > 0.0)
@@ -232,135 +226,9 @@ int main(int argc, char** argv)
     light_eye = center + light_dir * 5;
 
 
-    //first
-    lookat(eye, center, up);                              // build the ModelView   matrix
-    init_perspective((eye - center).norm());                        // build the Perspective matrix
-    init_viewport(width/16, height/16, width*7/8, height*7/8); // build the Viewport    matrix
-    init_zbuffer(width, height);
+    //Depth Shader => shadow buffer
     DepthShader depthShader(ModelObject);
-    for (int i=0; i<FacesNum; i++)
-    {
-        Triangle clip;
-        clip[0] = depthShader.vertex(i, 0);
-        clip[1] = depthShader.vertex(i, 1);
-        clip[2] = depthShader.vertex(i, 2);
-        rasterize(clip, depthShader, Tempbuffer);
-    }
-
-    cameraZbuffer = zbuffer;
-    mat<4,4> CameraScreen =
-    Viewport * Perspective * ModelView;
-    mat<4,4> CameraScreenInv =
-    inversion(CameraScreen);
-    
-    visibleCount.assign(width * height, 0);
-    validCount.assign(width * height, 0);
-    aoBuffer.assign(width * height, 1.0);
-
-    constexpr int sampleCount = 32;
-    for (int sample=0; sample<sampleCount; sample++)
-    {
-        double u = (std::rand()+0.5) / (RAND_MAX+1.0);
-        double v = (std::rand()+0.5) / (RAND_MAX+1.0);
-
-        double phi = 2.0 * std::acos(-1.0) * u;
-        double y = v;
-        double radius = std::sqrt(1.0 - y*y);
-
-        vec3f ao_dir{
-            radius * std::cos(phi),
-            y,
-            radius * std::sin(phi)
-        };
-
-        vec3f ao_eye = center + ao_dir * 5.0;
-        vec3f ao_up = std::abs(ao_dir * up) > 0.99
-                    ? vec3f{0,0,1}
-                    : up;
-
-        lookat(ao_eye, center, ao_up);
-        init_perspective((ao_eye-center).norm());
-        init_viewport(width/16, height/16, width*7/8, height*7/8);
-        init_zbuffer(width, height);
-
-        for (int i=0; i<FacesNum; i++)
-        {
-            Triangle clip;
-            clip[0] = depthShader.vertex(i, 0);
-            clip[1] = depthShader.vertex(i, 1);
-            clip[2] = depthShader.vertex(i, 2);
-            rasterize(clip, depthShader, Tempbuffer);
-        }
-
-        mat<4,4> SampleScreen =
-            Viewport * Perspective * ModelView;
-
-        for (int x = 0; x < width; x++)
-        {
-            for (int y = 0; y < height; y++)
-            {
-                int index = x + y * width;
-
-                if (cameraZbuffer[index] <=
-                    -std::numeric_limits<double>::max())
-                    continue;
-
-                vec<4> objectPoint =
-                    CameraScreenInv *
-                    vec<4>{static_cast<double>(x),
-                        static_cast<double>(y),
-                        cameraZbuffer[index],
-                        1.0};
-
-                vec<4> sampleClip = SampleScreen * objectPoint;
-
-                if (std::abs(sampleClip.w) < 1e-8)
-                    continue;
-
-                vec3f samplePoint{
-                    sampleClip.x / sampleClip.w,
-                    sampleClip.y / sampleClip.w,
-                    sampleClip.z / sampleClip.w
-                };
-
-                bool insideSampleMap =
-                samplePoint.x >= 0.0
-                && samplePoint.x < static_cast<double>(width)
-                && samplePoint.y >= 0.0
-                && samplePoint.y < static_cast<double>(height);
-                if (!insideSampleMap)
-                    continue;
-
-                int sampleX = static_cast<int>(samplePoint.x);
-                int sampleY = static_cast<int>(samplePoint.y);
-
-                double sampleDepth =
-                    zbuffer[sampleX + sampleY * width];
-
-                if (sampleDepth <=
-                -std::numeric_limits<double>::max())
-                {
-                    continue;
-                }
-                validCount[index]++;
-                double bias = 1e-2;
-
-                if (samplePoint.z > sampleDepth - bias)
-                    visibleCount[index]++;
-            }
-        }
-    }
-
-    for (int i=0; i<width*height; i++)
-    {
-        if (validCount[i] > 0)
-        aoBuffer[i] =
-            static_cast<double>(visibleCount[i])
-            / validCount[i];
-    }
-    
-    //before second
-    lookat(light_eye, center, up);
+    lookat(light_eye, center, up); //set modelview
     init_perspective((light_eye-center).norm());
     init_viewport(width/16, height/16, width*7/8, height*7/8);
     init_zbuffer(width, height);
@@ -374,20 +242,19 @@ int main(int argc, char** argv)
         rasterize(clip, depthShader, Tempbuffer);
     }
 
+    //shadow buffer
     std::vector<double> shadowbuffer = zbuffer;
-
     ShadowModelView = ModelView;
     ShadowPerspective = Perspective;
     ShadowViewport = Viewport;
 
-
-    //second
+    //Main buffer
     lookat(eye, center, up);                              // build the ModelView   matrix
     init_perspective((eye-center).norm());                        // build the Perspective matrix
     init_viewport(width/16, height/16, width*7/8, height*7/8); // build the Viewport    matrix
     init_zbuffer(width, height);
 
-    RandomShader shader(ModelObject, shadowbuffer,aoBuffer);
+    RandomShader shader(ModelObject, shadowbuffer);
 
     for(int i = 0 ; i < FacesNum ; i++)
     {
@@ -398,31 +265,6 @@ int main(int argc, char** argv)
         rasterize(clip, shader, framebuffer);
     }
     
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     //---------------------------------------------------------------------------------//
     //mapping Z Buffer
     double Zmax = - std::numeric_limits<double>::max();
