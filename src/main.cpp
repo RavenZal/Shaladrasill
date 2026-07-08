@@ -225,7 +225,7 @@ int main(int argc, char** argv)
     //draw lines
     int FacesNum = ModelObject.getFacesNumber();
     //set camera
-    const vec<3>    eye{-1,0,2}; // camera position
+    const vec<3>    eye{-1,1,2}; // camera position
     const vec<3> center{0,0,0};  // camera direction
     const vec<3>     up{0,1,0};  // camera up vector
     light_dir = vec3f(1 , 1 , 1).normalize();

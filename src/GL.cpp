@@ -48,13 +48,15 @@ void rasterize(const Triangle &clip , const IShader &shader , TGAImage &framebuf
     {
         for (int y= std::max<int>(bbminy, 0 ); y <= std::min<int>(bbmaxy, framebuffer.height() - 1); y++) 
         {
-            vec<3> bc = invert_transpose(ABC) * vec<3>(static_cast<double>(x), static_cast<double>(y), 1.);
-            if (bc.x < 0 || bc.y < 0 || bc.z < 0) continue;
-            double z = bc * vec<3>(ndc[0].z, ndc[1].z, ndc[2].z);
+            //centre of gravity
+            vec<3> bc = invert_transpose(ABC) * vec<3>(static_cast<double>(x), static_cast<double>(y), 1.); //centre of gravity：(Alpha, Beta , Gamma)
+            if (bc.x < 0 || bc.y < 0 || bc.z < 0) continue; //out of this triangle
+            double z = bc * vec<3>(ndc[0].z, ndc[1].z, ndc[2].z); //insert
+            //if this triangle is behind another one
             if (z <= zbuffer[x + y * framebuffer.width()]) continue;
             int pixelIndex = x + y * framebuffer.width();
             auto [discard, color] =
-            shader.fragment(bc, pixelIndex);
+            shader.fragment(bc, pixelIndex); //should keep this tri->fragment or not 
             if (discard) continue;
             zbuffer[x + y * framebuffer.width()] = z;
             framebuffer.set(x, y, color);
