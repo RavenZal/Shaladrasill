@@ -501,8 +501,23 @@ int main(int argc, char** argv)
                 int sampleY = static_cast<int>(sampleScreenPos.y);
                 int sampleIndex = sampleX + sampleY * width;
 
-                double sceneDepth = cameraZbuffer[sampleIndex]; //screen ZBuffer => CameraZBuffer
 
+                //Optimazation
+                double sceneDepth = cameraZbuffer[sampleIndex]; //screen ZBuffer => CameraZBuffer
+                vec3f scenePos = reconstructViewPosition(
+                sampleX,
+                sampleY,
+                sceneDepth,
+                invCameraScreen
+                );
+                //calculate the distance
+                double rangeDistance = (scenePos - viewPos).norm();
+                double rangeWeight = std::clamp(
+                    1.0 - rangeDistance / ssaoRadius,
+                    0.0,
+                    1.0
+                );
+                
                 if (sceneDepth <= -std::numeric_limits<double>::max())
                 {
                     continue;
@@ -512,10 +527,10 @@ int main(int argc, char** argv)
                 bool occluded = sampleDepth < sceneDepth - ssaoBias;
                 if (occluded)
                 {
-                    occlusion += 1.0;
+                    occlusion += rangeWeight;
                 }
 
-                    validSamples += 1.0;
+                    validSamples += rangeWeight; //validSample in this situation is not the number of valid samples
             }
         
             if (validSamples > 0.0)
