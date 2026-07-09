@@ -1,10 +1,10 @@
-# 🎨 TinyShader
+# 🎨 TinyRenderer
 
 > A from-scratch CPU software rasterizer — no OpenGL, no GPU, just math and pixels.
 
 **TinyShader** renders 3D models entirely on the CPU. It reads OBJ geometry and TGA textures, transforms vertices through a full graphics pipeline, rasterizes triangles by hand, shades every pixel with tangent-space normal mapping and Phong lighting, casts shadows, and applies screen-space ambient occlusion — all in C++.
 
-Built following the [tinyrenderer](https://github.com/ssloy/tinyrenderer) tutorial series.
+Built following the [tinyrenderer](https://haqr.eu/tinyrenderer/) tutorial series.
 
 ---
 
@@ -141,7 +141,8 @@ Kernel samples are randomly placed in a unit hemisphere, scaled by an accelerati
 ---
 
 ## 🙏 Credits
+Deeply appreciate: Prof. Dmitry V. Sokolov [ssloy](https://github.com/ssloy)
 
-Based on [ssloy/tinyrenderer](https://github.com/ssloy/tinyrenderer) — a brilliant course in building a software renderer from scratch.
+Based on Course [Playing with code](https://haqr.eu/tinyrenderer/) — a brilliant course in building a software renderer from scratch.
 
-Model and textures from Blizzard's Diablo 3, used for educational purposes.
+Model and textures from Blizzard's Diablo 3, Diablo, used for educational purposes.
