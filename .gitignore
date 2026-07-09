@@ -2,7 +2,7 @@
 build/
 
 # 3. ignore tga
-*.tga
+/*.tga
 
 # 4. ignore local cache of vscode
 .vscode/ipch/
