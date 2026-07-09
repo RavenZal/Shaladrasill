@@ -7,6 +7,7 @@
 #include <tuple>
 #include <limits>
 #include <algorithm>
+#include <random>
 
 using namespace std;
 
@@ -21,18 +22,135 @@ constexpr float deepth = 255.0;
 
 extern mat<4,4> ModelView, Perspective, Viewport; // like OpenGL
 extern std::vector<double> zbuffer;     // the depth buffer
+std::vector<double> shadowbuffer;
 std::vector<double> cameraZbuffer;
-std::vector<int> visibleCount;
-std::vector<int> validCount;
 std::vector<double> aoBuffer;
+std::vector<vec3f> cameraNormalBuffer; //SSAO => Normal coorp
+
 
 vec3f light_dir;
 vec3f light_eye;
-
+//shadowbuffer
 mat<4,4> ShadowModelView ;
 mat<4,4> ShadowPerspective ;
 mat<4,4> ShadowViewport ;
+
+//camerabuffer
+mat<4,4> CameraModelView;
+mat<4,4> CameraPerspective;
+mat<4,4> CameraViewport;
+
+
+//tool
+vec3f reconstructViewPosition(
+    const int x,
+    const int y,
+    const double z,
+    const mat<4,4> &invCameraScreen
+)
+{
     
+    vec<4> screenPoint{
+        static_cast<double>(x),
+        static_cast<double>(y),
+        z,
+        1.0
+    };
+
+    vec<4> viewH = invCameraScreen * screenPoint;
+
+    return vec3f(
+        viewH.x / viewH.w,
+        viewH.y / viewH.w,
+        viewH.z / viewH.w
+    ); //from homogeneous coord to origin : /w
+}
+
+double lerp(const double a, const double b, const double t)
+{
+    return a + (b - a) * t;
+}
+
+std::vector<vec3f> generateSSAOKernel(const int sampleCount)
+{
+    std::vector<vec3f> kernel;
+    kernel.reserve(sampleCount);
+
+    std::mt19937 rng(13);
+    std::uniform_real_distribution<double> rand01(0.0, 1.0);
+
+    for (int i = 0; i < sampleCount; i++)
+    {
+        vec3f sample{
+            rand01(rng) * 2.0 - 1.0,
+            rand01(rng) * 2.0 - 1.0,
+            rand01(rng)
+        };
+
+        sample = sample.normalize();
+
+        double randomRadius = rand01(rng);
+        sample = sample * randomRadius;
+
+        double scale = static_cast<double>(i) / static_cast<double>(sampleCount);
+        scale = lerp(0.1, 1.0, scale * scale);
+
+        sample = sample * scale;
+
+        kernel.push_back(sample);
+    }
+
+    return kernel;
+}
+
+vec3f kernelToViewSpace(const vec3f &sample, const vec3f &normal)
+{
+    vec3f N = normal;
+
+    vec3f helper =
+        std::abs(N.z) < 0.999
+        ? vec3f(0, 0, 1)
+        : vec3f(0, 1, 0);
+
+    vec3f T = cross(helper, N).normalize();
+    vec3f B = cross(N, T).normalize();
+
+    return T * sample.x
+         + B * sample.y
+         + N * sample.z;
+}
+
+bool projectViewPositionToScreen(
+    const vec3f &viewPos,
+    const mat<4,4> &cameraPerspective,
+    const mat<4,4> &cameraViewport,
+    vec3f &screenPos
+)
+{
+    vec<4> clip = cameraPerspective * vec<4>{
+        viewPos.x,
+        viewPos.y,
+        viewPos.z,
+        1.0
+    };
+
+    if (std::abs(clip.w) < 1e-12)
+    {
+        return false;
+    }
+
+    vec<4> ndc = clip / clip.w;
+    vec<4> screen = cameraViewport * ndc;
+
+    screenPos = vec3f(screen.x, screen.y, screen.z);
+
+    return screenPos.x >= 0.0
+        && screenPos.x < static_cast<double>(width)
+        && screenPos.y >= 0.0
+        && screenPos.y < static_cast<double>(height);
+}
+
+//shader
 struct DepthShader : IShader{
     const Model &model;
     //preSet
@@ -56,10 +174,73 @@ struct DepthShader : IShader{
 
 
 };
+
+struct CameraBufferShader : IShader{
+    const Model &model;
+    std::vector<vec3f> &_normalbuffer;
+    vec3f thisTriNormlineSet[3];
+    double cameraInvW[3];
+    
+    //preSet
+    CameraBufferShader(const Model &m, std::vector<vec3f> &normalbuffer)
+        : model(m), _normalbuffer(normalbuffer)
+    {
+    }
+
+    virtual vec<4> vertex(const int face, const int vert) {
+    const std::vector<int>& faceSet = model.getFacesFromIndex(face);
+    int vertexIndex = faceSet[vert]; 
+    vec<3> v = model.getVertsFromIndex(vertexIndex);                       // current vertex in object coordinates
+    vec<3> n = model.getNormalLineFrom(face, vert); //get line norm
+    vec<4> gl_Position = ModelView * vec<4>{v.x, v.y, v.z, 1.};
+    vec<4> gl_Normal = ModelView * vec<4>{n.x, n.y, n.z, 0.}; 
+    
+    thisTriNormlineSet[vert] =
+        vec3f(gl_Normal[0], gl_Normal[1], gl_Normal[2]).normalize();
+    //perspective ：(1/ (1 - v_z / f)) *[v_x v_y v_z ]^T
+    vec<4> camera_clip = Perspective * gl_Position;
+    cameraInvW[vert] = 1.0 / camera_clip.w;
+    //return
+    return camera_clip;                         // in clip coordinates
+    }
+
+    virtual std::pair<bool,TGAColor> fragment(const vec<3> bar, const int pixelIndex) const
+    {
+        vec3f correctedBar{
+            bar.x * cameraInvW[0],
+            bar.y * cameraInvW[1],
+            bar.z * cameraInvW[2]
+        };
+
+        double correctedSum =
+            correctedBar.x +
+            correctedBar.y +
+            correctedBar.z;
+
+        correctedBar = correctedBar / correctedSum;
+        
+        vec3f interpolated_n =
+        (thisTriNormlineSet[0] * correctedBar.x
+        +thisTriNormlineSet[1] * correctedBar.y
+        +thisTriNormlineSet[2] * correctedBar.z).normalize();
+
+        _normalbuffer[pixelIndex] = interpolated_n; //container
+        unsigned char r = static_cast<unsigned char>(std::clamp((interpolated_n.x * 0.5 + 0.5) * 255.0, 0.0, 255.0));
+        unsigned char g = static_cast<unsigned char>(std::clamp((interpolated_n.y * 0.5 + 0.5) * 255.0, 0.0, 255.0));
+        unsigned char b = static_cast<unsigned char>(std::clamp((interpolated_n.z * 0.5 + 0.5) * 255.0, 0.0, 255.0));
+
+        return {false, TGAColor{b, g, r, 255}};
+
+    }
+
+
+};
+
 struct RandomShader : IShader {
     const Model &model;
     vec3f l;
     const std::vector<double> &_shadowbuffer;
+    const std::vector<double> &_aobuffer;
     //preSet
     TGAColor color = {};
     vec<3> tri[3];  // triangle in eye coordinates
@@ -79,7 +260,7 @@ struct RandomShader : IShader {
     double cameraInvW[3]; //with /w
     //in shadowTri : x = x in shadow map, y = y in shadow map
     //z = deepth in light view
-    RandomShader(const Model &m, const std::vector<double>& shadowbuffer) : model(m), _shadowbuffer(shadowbuffer)
+    RandomShader(const Model &m, const std::vector<double>& shadowbuffer, const std::vector<double>& aoBuffer) : model(m), _shadowbuffer(shadowbuffer), _aobuffer(aoBuffer)
     {
         //l
         vec<4> _l = ModelView * vec<4>{light_dir.x , light_dir.y , light_dir.z , 0.};
@@ -98,6 +279,7 @@ struct RandomShader : IShader {
         thisTriNormlineSet[vert] = vec3f (gl_Normal[0], gl_Normal[1], gl_Normal[2]).normalize();
         thisTriTexSet[vert] = uv;
         //keep var in shadow tri
+        //perspective ：(1/ (1 - v_z / f)) *[v_x v_y v_z ]^T
         vec<4> camera_clip = Perspective * gl_Position;
         shadowClip[vert] =
             ShadowPerspective *
@@ -191,7 +373,8 @@ struct RandomShader : IShader {
         double unit_dif = std::max(0., l * n);
         double diffuse = kd * unit_dif;
         //ambient
-        double ambient = ka;
+        double ao = _aobuffer[pixelIndex];
+        double ambient = ka * ao;
         //specular
         double specular = 0.0;       
         if(unit_dif > 0.0)
@@ -211,6 +394,7 @@ struct RandomShader : IShader {
     }
 };
 
+
 int main(int argc, char** argv) 
 {
     TGAImage framebuffer(width, height, TGAImage::RGB);
@@ -225,7 +409,7 @@ int main(int argc, char** argv)
     light_dir = vec3f(1 , 1 , 1).normalize();
     light_eye = center + light_dir * 5;
 
-
+    //---------------SHADOW------------------//
     //Depth Shader => shadow buffer
     DepthShader depthShader(ModelObject);
     lookat(light_eye, center, up); //set modelview
@@ -243,18 +427,126 @@ int main(int argc, char** argv)
     }
 
     //shadow buffer
-    std::vector<double> shadowbuffer = zbuffer;
+    shadowbuffer = zbuffer;
     ShadowModelView = ModelView;
     ShadowPerspective = Perspective;
     ShadowViewport = Viewport;
 
+    //---------------SSAO------------------//
+    //Camera Depth Pass => cameraZbuffer + cameraNormalBuffer
+    cameraNormalBuffer = std::vector<vec3f>(width * height, vec3f(0, 0, 0));
+    CameraBufferShader cameraBufferShader(ModelObject, cameraNormalBuffer);
+    lookat(eye, center, up);
+    init_perspective((eye-center).norm());
+    init_viewport(width/16, height/16, width*7/8, height*7/8);
+    init_zbuffer(width, height);
+    TGAImage normalImage(width, height, TGAImage::RGB);
+
+    for (int i=0; i<FacesNum; i++)
+    {
+        Triangle clip;
+        clip[0] = cameraBufferShader.vertex(i, 0);
+        clip[1] = cameraBufferShader.vertex(i, 1);
+        clip[2] = cameraBufferShader.vertex(i, 2);
+        rasterize(clip, cameraBufferShader, normalImage);
+    }
+    
+    CameraModelView = ModelView;
+    CameraPerspective = Perspective;
+    CameraViewport = Viewport;
+    cameraZbuffer = zbuffer;
+    //temp check
+    normalImage.write_tga_file("normalbuffer.tga");
+    
+    //Create Points
+    mat<4,4> invCameraScreen = inversion(CameraViewport * CameraPerspective);
+    constexpr int ssaoSampleCount = 32;
+    std::vector<vec3f> ssaoKernel = generateSSAOKernel(ssaoSampleCount);
+    const double ssaoRadius = 0.15;
+    aoBuffer = std::vector<double>(width * height, 1.0);
+
+    for (int x = 0; x < width; x++)
+    {
+        for (int y = 0; y < height; y++)
+        {
+            int index = x + y * width;
+            double z = cameraZbuffer[index];
+
+            if (z <= -std::numeric_limits<double>::max())
+            {
+                continue;
+            }
+
+            vec3f viewPos = reconstructViewPosition(x, y, z, invCameraScreen);
+            vec3f normal = cameraNormalBuffer[index].normalize();
+            double occlusion = 0.0;
+            double validSamples = 0.0;
+            const double ssaoBias = 1e-2;
+            
+            for (const vec3f &sample : ssaoKernel)
+            {
+                vec3f sampleDir = kernelToViewSpace(sample, normal);
+                vec3f samplePos = viewPos + sampleDir * ssaoRadius;
+                vec3f sampleScreenPos;
+                if (!projectViewPositionToScreen(
+                        samplePos,
+                        CameraPerspective,
+                        CameraViewport,
+                        sampleScreenPos
+                    ))
+                {
+                    continue;
+                }
+                int sampleX = static_cast<int>(sampleScreenPos.x);
+                int sampleY = static_cast<int>(sampleScreenPos.y);
+                int sampleIndex = sampleX + sampleY * width;
+
+                double sceneDepth = cameraZbuffer[sampleIndex]; //screen ZBuffer => CameraZBuffer
+
+                if (sceneDepth <= -std::numeric_limits<double>::max())
+                {
+                    continue;
+                }
+
+                double sampleDepth = sampleScreenPos.z;
+                bool occluded = sampleDepth < sceneDepth - ssaoBias;
+                if (occluded)
+                {
+                    occlusion += 1.0;
+                }
+
+                    validSamples += 1.0;
+            }
+        
+            if (validSamples > 0.0)
+            {
+                aoBuffer[index] = 1.0 - occlusion / validSamples;
+            }
+            else
+            {
+                aoBuffer[index] = 1.0;
+            }
+        }
+    }
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     //Main buffer
     lookat(eye, center, up);                              // build the ModelView   matrix
     init_perspective((eye-center).norm());                        // build the Perspective matrix
     init_viewport(width/16, height/16, width*7/8, height*7/8); // build the Viewport    matrix
     init_zbuffer(width, height);
 
-    RandomShader shader(ModelObject, shadowbuffer);
+    RandomShader shader(ModelObject, shadowbuffer, aoBuffer);
 
     for(int i = 0 ; i < FacesNum ; i++)
     {

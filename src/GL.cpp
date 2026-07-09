@@ -49,7 +49,7 @@ void rasterize(const Triangle &clip , const IShader &shader , TGAImage &framebuf
         for (int y= std::max<int>(bbminy, 0 ); y <= std::min<int>(bbmaxy, framebuffer.height() - 1); y++) 
         {
             //centre of gravity
-            vec<3> bc = invert_transpose(ABC) * vec<3>(static_cast<double>(x), static_cast<double>(y), 1.); //centre of gravity：(Alpha, Beta , Gamma)
+            vec<3> bc = invert_transpose(ABC) * vec<3>(static_cast<double>(x), static_cast<double>(y), 1.); //centre of gravity：(Alpha, Beta , Gamma) //screen
             if (bc.x < 0 || bc.y < 0 || bc.z < 0) continue; //out of this triangle
             double z = bc * vec<3>(ndc[0].z, ndc[1].z, ndc[2].z); //insert
             //if this triangle is behind another one
